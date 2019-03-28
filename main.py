@@ -1,5 +1,6 @@
 from pyarrow import hdfs
 from pyarrow import csv
+from pyarrow import parquet
 import requests
 import os
 
@@ -57,6 +58,11 @@ def index_dataset(dataset_id, dataset):
                 print("Unsupported File!")
         else:
             print("TRY TO READ PARQUET DIR")
+            try:
+                index_parquet_dir(dataset_id, file)
+            except:
+                index_dataset(dataset_id, file)
+
 
 def index_csv(dataset_id, file):
     try:
@@ -85,8 +91,77 @@ def create_file(record):
     r = graphql(query, variables)
     print("GRAPHQL FILE", r.json())
 
+def getTypeFromPhysicalType(dtype):
+    type_map = {
+        'INT64': 'INTEGER',
+        'INT32': 'INTEGER',
+        'INT96': 'INTEGER',
+        'INT8': 'INTEGER',
+        'FLOAT': 'DECIMAL',
+        'DOUBLE': 'DECIMAL',
+        'FLOAT': 'DECIMAL',
+        'BOOLEAN': 'BOOLEAN',
+        'DATE': 'DATE',
+    }
+    known_type = type_map.get(str(dtype))
+    return known_type if known_type else 'STRING'
+
+def getTypeFromLogicalType(dtype):
+    type_map = {
+       # 'UTF8': 'STRING',
+        'UINT_8': 'INTEGER',
+        'UINT_16': 'INTEGER',
+        'UINT_32': 'INTEGER',
+        'UINT_64': 'INTEGER',
+        'INT_8': 'INTEGER',
+        'INT_16': 'INTEGER',
+        'INT_32': 'INTEGER',
+        'INT_64': 'INTEGER',
+        'DECIMAL': 'DECIMAL',
+        'DATE': 'DATE',
+    }
+    known_type = type_map.get(str(dtype))
+    return known_type if known_type else 'STRING'
+
+def getType(physical_type, logical_type):
+    if (logical_type == 'NONE'):
+        return getTypeFromPhysicalType(physical_type)
+    else:
+        return getTypeFromLogicalType(logical_type)
+
+def index_parquet_dir(dataset_id, dir):
+    dataset = parquet.ParquetDataset(dir)
+    metadata = {
+        'num_rows': dataset.metadata.num_rows,
+        'num_row_groups': dataset.metadata.num_row_groups,
+        'serialized_size': dataset.metadata.serialized_size
+    }
+    print(metadata)
+    parquet_header = []
+    for item in dataset.schema:
+        parquet_header.append({
+            'name': item.name,
+            'type': getType(item.physical_type, item.logical_type)
+        })
+        # physical_type logical_type
+    print(parquet_header)
+
 def index_parquet(dataset_id, file):
-    pass
+    parquet_file = parquet.ParquetFile(file)
+    metadata = {
+        'num_rows': parquet_file.metadata.num_rows,
+        'num_row_groups': parquet_file.metadata.num_row_groups,
+        'serialized_size': parquet_file.metadata.serialized_size
+    }
+    print(metadata)
+    parquet_header = []
+    for item in parquet_file.schema:
+        parquet_header.append({
+            'name': item.name,
+            'type': getType(item.physical_type, item.logical_type)
+        })
+        # physical_type logical_type
+    print(parquet_header)
 
 scan()
 
